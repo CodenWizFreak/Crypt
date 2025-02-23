@@ -1,0 +1,11 @@
+streamlit
+aptos_sdk
+pymongo
+python-dotenv
+pygame
+datetime
+pandas
+web3
+streamlit_javascript
+transformers
+google-generativeai
