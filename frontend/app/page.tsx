@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Wallet,
-  ChevronDown,
   GamepadIcon,
   Trophy,
   Coins,
@@ -38,10 +37,12 @@ export default function Home() {
   const [walletAddress, setWalletAddress] = useState("");
   const [walletType, setWalletType] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const walletConfigs = [
     {
       name: "Petra",
+      logo: "/petra.jpeg",  // Add the path to the Petra logo image
       check: () => typeof window !== "undefined" && window.aptos,
       connect: async () => {
         const response = await window.aptos.connect();
@@ -50,6 +51,7 @@ export default function Home() {
     },
     {
       name: "Rainbow",
+      logo: "/rainbow.png",  // Add the path to the Rainbow logo image
       check: () => typeof window !== "undefined" && window.ethereum?.isRainbow,
       connect: async () => {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -60,6 +62,7 @@ export default function Home() {
     },
     {
       name: "MetaMask",
+      logo: "/metamask.webp",  // Add the path to the MetaMask logo image
       check: () => typeof window !== "undefined" && window.ethereum?.isMetaMask,
       connect: async () => {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -70,6 +73,7 @@ export default function Home() {
     },
     {
       name: "Coinbase",
+      logo: "/coinbase.png",  // Add the path to the Coinbase logo image
       check: () => typeof window !== "undefined" && window.ethereum?.isCoinbaseWallet,
       connect: async () => {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -89,10 +93,12 @@ export default function Home() {
       localStorage.setItem("walletAddress", address);
       localStorage.setItem("walletType", walletConfig.name);
 
+      setIsDialogOpen(false);
+
       // Send wallet address to FastAPI backend if it's a Petra wallet
       if (walletConfig.name === "Petra") {
         try {
-          const response = await fetch('http://localhost:8000/api/connect-wallet', {
+          const response = await fetch('http://127.0.0.1:8000/api/connect-wallet', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -120,7 +126,7 @@ export default function Home() {
     // Disconnect from backend if it's a Petra wallet
     if (walletType === "Petra") {
       try {
-        await fetch('http://localhost:8000/api/disconnect-wallet', {
+        await fetch('http://127.0.0.1:8000/api/disconnect-wallet', {
           method: 'POST',
         });
       } catch (error) {
@@ -141,6 +147,24 @@ export default function Home() {
       setWalletAddress(savedAddress);
       setWalletType(savedType);
     }
+
+    // Handle wallet disconnection request from Streamlit
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "streamlit_disconnect" && e.newValue === "true") {
+        disconnectWallet();
+        localStorage.removeItem("streamlit_disconnect");
+      }
+    };
+
+    // Check for disconnection flag on page load
+    const disconnectFlag = localStorage.getItem("streamlit_disconnect");
+    if (disconnectFlag === "true") {
+      disconnectWallet();
+      localStorage.removeItem("streamlit_disconnect");
+    }
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   const shortenAddress = (address: string | any[]) => {
@@ -157,7 +181,7 @@ export default function Home() {
         <div className="container mx-auto space-y-8 relative z-10">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold">
             Welcome to{" "}
-            <span className="gradient-text">
+            <span className="bg-gradient-to-r from-purple-400 via-pink-500 to-purple-600 text-transparent bg-clip-text bg-200% animate-gradient-x">
               Cryptonian
             </span>
           </h1>
@@ -168,16 +192,25 @@ export default function Home() {
             <Button
               size="lg"
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-transform"
+              onClick={() => {
+                if (walletAddress) {
+                  // Redirect to Streamlit dashboard with wallet address
+                  window.location.href = `http://localhost:8502?wallet=${walletAddress}`;
+                } else {
+                  alert("Please connect your wallet first!");
+                }
+              }}
             >
               Get Started
             </Button>
-            <Dialog>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button
                   size="lg"
                   variant="outline"
                   className="border-purple-500 bg-transparent text-white hover:bg-purple-900/20 group relative overflow-hidden"
                   disabled={isConnecting}
+                  onClick={() => setIsDialogOpen(true)}
                 >
                   <span className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-20 transition-opacity" />
                   <Wallet className="h-5 w-5 text-white mr-2" />
@@ -189,35 +222,43 @@ export default function Home() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="bg-black border-purple-500 text-white">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-bold text-center">Connect Wallet</DialogTitle>
-                </DialogHeader>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                  {walletConfigs.map((config) => (
-                    config.check() && (
-                      <Button
-                        key={config.name}
-                        onClick={() => connectWallet(config)}
-                        className="flex items-center justify-center p-4 bg-gray-900 hover:bg-gray-800 rounded-lg border border-purple-500 transition-colors"
-                        disabled={isConnecting}
-                      >
-                        {config.name}
-                      </Button>
-                    )
-                  ))}
-                </div>
+              <DialogContent className="bg-black border-purple-500 text-white fixed inset-0 flex items-center justify-center z-50">
+                <div className="bg-black/90 p-6 rounded-lg border border-purple-500/30 backdrop-blur-sm max-w-md w-full">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold text-center">Connect Wallet</DialogTitle>
+                  </DialogHeader>
 
-                {walletAddress && (
-                  <Button
-                    onClick={disconnectWallet}
-                    variant="destructive"
-                    className="mt-4 w-full"
-                  >
-                    Disconnect
-                  </Button>
-                )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                    {walletConfigs.map((config) => (
+                      config.check() && (
+                        <Button
+                          key={config.name}
+                          onClick={() => connectWallet(config)}
+                          className="flex items-center justify-center p-4 bg-gray-900 hover:bg-gray-800 rounded-lg border border-purple-500 transition-colors"
+                          disabled={isConnecting}
+                        >
+                          <Image 
+                            src={config.logo} 
+                            alt={config.name} 
+                            width={50} 
+                            height={50} 
+                            className="h-8 w-8"
+                          />
+                        </Button>
+                      )
+                    ))}
+                  </div>
+
+                  {walletAddress && (
+                    <Button
+                      onClick={disconnectWallet}
+                      variant="destructive"
+                      className="mt-4 w-full"
+                    >
+                      Disconnect
+                    </Button>
+                  )}
+                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -226,9 +267,7 @@ export default function Home() {
               Connected Wallet: {shortenAddress(walletAddress)}
             </p>
           )}
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
-            <ChevronDown className="h-8 w-8 text-gray-300" />
-          </div>
+          
         </div>
       </section>
 
@@ -347,7 +386,7 @@ export default function Home() {
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg opacity-30 blur-xl animate-pulse" />
               <Image
-                src="/placeholder.svg?height=600&width=600"
+                src="/meta.jpg"
                 width={600}
                 height={600}
                 alt="About Cryptonian"
@@ -449,4 +488,3 @@ export default function Home() {
     </div>
   )
 }
-
