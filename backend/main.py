@@ -1,6 +1,7 @@
 # main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import json
 from pathlib import Path
@@ -21,6 +22,9 @@ app.add_middleware(
 class WalletAddress(BaseModel):
     address: str
 
+class RedirectResponse(BaseModel):
+    url: str
+
 # File to store the wallet address
 WALLET_FILE = "wallet_address.json"
 
@@ -36,6 +40,10 @@ def get_wallet_address():
         return {"wallet_address": "", "connected": False}
     with open(WALLET_FILE, "r") as f:
         return json.load(f)
+    
+@app.get("/api/")
+async def read_root():
+    return {"message": "Welcome to Cryptonian API!"}  
 
 @app.post("/api/connect-wallet")
 async def connect_wallet(wallet: WalletAddress):
@@ -55,5 +63,17 @@ async def disconnect_wallet():
         if Path(WALLET_FILE).exists():
             os.remove(WALLET_FILE)
         return {"status": "success", "message": "Wallet disconnected successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/redirect-to-next")
+async def redirect_to_next(request: RedirectResponse):
+    """Endpoint to handle redirection to Next.js app"""
+    try:
+        # First disconnect the wallet
+        if Path(WALLET_FILE).exists():
+            os.remove(WALLET_FILE)
+        # Return a redirect response
+        return RedirectResponse(url=request.url, status_code=303)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
